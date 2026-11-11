@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pitch Launcher</title>
+<style>
+:root{--bg:#f4f1ea;--fg:#1d2a1f;--card:#fff;--accent:#c8372d;--line:#d9d4c7;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14201a;--fg:#eef1e8;--card:#1f2e25;--accent:#ff6a5c;--line:#35493c}}
+:root[data-theme="dark"]{--bg:#14201a;--fg:#eef1e8;--card:#1f2e25;--accent:#ff6a5c;--line:#35493c}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:12px;position:relative}
+h1{margin:4px 0 8px;font-size:1.3rem}
+#wrap{width:100%;max-width:820px}
+canvas{width:100%;height:auto;border-radius:12px;border:1px solid var(--line);touch-action:none;display:block}
+#hud{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:8px 0;font-weight:600;font-variant-numeric:tabular-nums}
+#hud span:nth-child(2){text-align:center}
+#hud span:nth-child(3){text-align:right}
+#shop,#dojoShop{display:flex;gap:8px;flex-wrap:wrap}
+button{flex:1;min-width:140px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:not(:disabled):hover{border-color:var(--accent)}
+p.hint{margin:8px 0 0;font-size:.9rem;opacity:.8}
+
+/* Editor Button and Modal Styles */
+#editBtn{position:absolute;top:12px;left:12px;padding:6px 12px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;font-size:.85rem;font-weight:600;cursor:pointer;z-index:1000;flex:none;min-width:0}
+#editBtn:hover{border-color:var(--accent)}
+button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+@media (max-width:640px){body{padding-top:52px}h1{font-size:1.15rem}}
+#custBtn{position:absolute;top:12px;right:12px;padding:6px 12px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;font-size:.85rem;font-weight:600;cursor:pointer;z-index:1000;flex:none;min-width:0}
+#custBtn:hover{border-color:var(--accent)}
+#custModal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center}
+#custBox{background:var(--card);color:var(--fg);width:90%;max-width:360px;padding:20px;border-radius:12px;display:flex;flex-direction:column;gap:12px}
+#custBox label{display:flex;justify-content:space-between;align-items:center;gap:12px}
+#custBox input[type=color]{width:56px;height:30px;padding:0;border:1px solid var(--line);background:none}
+#custBox select{padding:6px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;font:inherit}
+#editorModal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center}
+#editorContent{background:var(--card);color:var(--fg);width:90%;max-width:800px;height:80%;padding:20px;border-radius:12px;display:flex;flex-direction:column;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.2)}
+#editorTextarea{flex:1;font-family:monospace;font-size:.9rem;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);resize:none}
+.editor-actions{display:flex;justify-content:flex-end;gap:12px}
+.editor-actions button{flex:none;min-width:100px}
+</style>
+</head>
+<body>
+
+<button id="editBtn" onclick="openEditor()">⚙️ Edit Code</button>
+
+<h1>⚾ Pitch Launcher</h1>
+<div id="wrap">
+  <div id="hud"><span id="dist">Last: 0 cm</span><span id="best">Best: 0 cm</span><span id="cash">$0</span></div>
+  <canvas id="c" width="800" height="450"></canvas>
+  <button id="bPay" style="display:none;margin-top:8px;width:100%"></button>
+  <div id="shop" style="margin-top:8px">
+    <button id="bPow"></button>
+    <button id="bBounce"></button>
+    <button id="bDojo"></button>
+  </div>
+  <div id="dojoShop" style="margin-top:8px;display:none">
+    <button id="bD0"></button>
+    <button id="bD1"></button>
+    <button id="bD2"></button>
+    <button id="bBack">← Back to the field</button>
+  </div>
+  <p class="hint">Move the mouse (or ↑/↓) to aim your throw. Click or press Space to start the power meter, then again to release the pitch. Earn money by distance and buy upgrades. Don’t overwork your pitcher: his arm can give out after a random number of throws, and you lose all your money and upgrades when it does. Visit the Dojo to train and last longer. Press R to reset all progress. <b>Dojo cat:</b> the cat wanders around the Dojo, naps, plays in the ice bath or with a plyo ball (about 30 seconds each), and sometimes climbs the banner and falls. His name tag follows him around, and you can change the name, his color and his spots in Customize. <b>On a phone:</b> drag on the field to aim, lift your finger to start the power meter, then tap to throw.</p>
+</div>
+<button id="custBtn">🎨 Customize</button>
+<div id="custModal"><div id="custBox"><h3 style="margin:0">Customize</h3>
+<label>Skin color <input type="color" id="cSkin"></label>
+<label>Body color <input type="color" id="cBody"></label>
+<label>Ball <select id="cBall"></select></label>
+<label>Hat <input type="checkbox" id="cHat"></label>
+<label>Cat color <select id="cCat"></select></label>
+<label>Cat spots <input type="checkbox" id="cSpots"></label>
+<label>Spot color <select id="cSpotCol"></select></label>
+<label>Cat name tag <input type="text" id="cName" maxlength="16" style="width:130px;padding:6px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;font:inherit"></label>
+<button id="cDone">Done</button></div></div>
+<div id="editorModal">
+  <div id="editorContent">
+    <h3>Code Editor</h3>
+    <textarea id="editorTextarea"></textarea>
+    <div class="editor-actions">
+      <button onclick="closeEditor()" style="background:transparent;">Cancel</button>
+      <button onclick="applyCode()" style="background:var(--accent); color:#fff; border-color:var(--accent);">Apply Changes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+const gen=window.__gen=(window.__gen||0)+1; // lets a reloaded copy shut down this copy of the game
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+const W=800,H=450,GROUND=H-70,BX=110,BY=GROUND-62;
+let phase=0; // 0 aim, 1 power, 2 flying, 3 done
+let angle=45,power=0,powDir=1,swing=0,ft=0;
+let ball={x:BX+40,y:BY,vx:0,vy:0,r:7,rot:0};
+let cash=0,best=0,last=0,powLvl=0,bncLvl=0,camX=0,condLvl=0,throws=0,limit=0,dead=false,hatIdx=0,inDojo=false,dojoLvl=[0,0,0],bill=0;
+let rating='',ratingT=0;
+const rateOf=p=>p>=.95?'PERFECT!':p>=.7?'GREAT!':p>=.4?'GOOD':'BAD'; // zones of the power meter
+const look={skin:'#f1c27d',body:'#222222',ball:0,hat:true,catColor:0,catSpots:false,catSpot:1,catName:'Tommy'};
+const hatColors=['#c8372d','#1e66d0','#f2b705','#2e9e4f','#8e44ad','#ef7d22','#111111'];
+let save={};
+try{save=JSON.parse(sessionStorage.getItem('hrl')||'{}')}catch(e){}
+if(save.cash!=null){cash=save.cash;best=save.best||0;powLvl=save.powLvl||0;bncLvl=save.bncLvl||0;dojoLvl=Array.isArray(save.dojoLvl)?save.dojoLvl.slice(0,3):[0,0,0];condLvl=dojoLvl.reduce((a,b)=>a+b,0)/3;hatIdx=(save.hatIdx||0)%hatColors.length}
+if(save.look)Object.assign(look,save.look);
+function persist(){try{sessionStorage.setItem('hrl',JSON.stringify({cash,best,powLvl,bncLvl,dojoLvl,hatIdx,look,dead,bill}))}catch(e){}}
+
+const powCost=()=>Math.round(100*Math.pow(2,powLvl));
+const bncCost=()=>Math.round(100*Math.pow(2,bncLvl));
+const dojoNames=['Band Exercises','Ice Bath','Plyo Balls'];
+// Dojo prices. Order: Band Exercises, Ice Bath, Plyo Balls
+const dojoBase=[100,100,100];     // starting price of each upgrade
+const dojoGrowth=[2,2,2]; // how much each price multiplies per level bought
+const dojoCost=i=>Math.round(dojoBase[i]*Math.pow(dojoGrowth[i],dojoLvl[i]));
+// Hidden throw limit for the current pitcher: a random number in a range that grows with Conditioning.
+function rollLimit(){limit=Math.floor(8+4*condLvl+Math.random()*(7+2*condLvl))}
+function ui(){uiBase();uiDead()}
+function uiDead(){
+  const p=document.getElementById('bPay');
+  p.style.display=dead?'block':'none';p.textContent='🏥 Pay medical bill ($'+bill+')';
+  document.querySelectorAll('#shop button,#dojoShop button').forEach(b=>{if(dead)b.disabled=true;else if(b.id==='bDojo'||b.id==='bBack')b.disabled=false});
+}
+// Paying the bill takes all your money and upgrades and brings in a new pitcher.
+function payBill(){
+  if(!dead)return;
+  cash=0;powLvl=0;bncLvl=0;condLvl=0;dojoLvl=[0,0,0];
+  hatIdx=(hatIdx+1)%hatColors.length;rollLimit();reset();persist();ui();
+}
+function uiBase(){
+  document.getElementById('dist').textContent='Last: '+last+' cm';
+  document.getElementById('best').textContent='Best: '+best+' cm';
+  document.getElementById('cash').textContent='$'+cash;
+  const a=document.getElementById('bPow'),b=document.getElementById('bBounce');
+  a.textContent='Stronger arm (Lv '+powLvl+') · $'+powCost();a.disabled=cash<powCost();
+  b.textContent='Spin rate (Lv '+bncLvl+') · $'+bncCost();b.disabled=cash<bncCost();document.getElementById('bDojo').textContent='🏯 Dojo (Conditioning Lv '+(Math.round(condLvl*10)/10)+')';
+  for(let i=0;i<3;i++){const d=document.getElementById('bD'+i);d.textContent=dojoNames[i]+' (Lv '+dojoLvl[i]+') · $'+dojoCost(i);d.disabled=cash<dojoCost(i)}
+}
+document.getElementById('bPow').onclick=()=>{if(cash>=powCost()){cash-=powCost();powLvl++;persist();ui()}};
+document.getElementById('bBounce').onclick=()=>{if(cash>=bncCost()){cash-=bncCost();bncLvl++;persist();ui()}};
+// Each Dojo level is worth 1/3 of an old Conditioning level, so 3 Dojo levels (any mix) = 1 full Conditioning level.
+function buyDojo(i){if(cash>=dojoCost(i)){cash-=dojoCost(i);dojoLvl[i]++;condLvl=dojoLvl.reduce((a,b)=>a+b,0)/3;limit+=(4+Math.floor(Math.random()*3))/3;persist();ui()}}
+[0,1,2].forEach(i=>{document.getElementById('bD'+i).onclick=()=>buyDojo(i)});
+function setDojo(v){
+  if(v&&(phase===1||phase===2))return; // can't leave mid-throw
+  inDojo=v;
+  document.getElementById('shop').style.display=v?'none':'flex';
+  document.getElementById('dojoShop').style.display=v?'flex':'none';
+  ui();
+}
+document.getElementById('bDojo').onclick=()=>setDojo(true);
+document.getElementById('bBack').onclick=()=>setDojo(false);
+
+function reset(){rating='';dead=false;phase=0;power=0;powDir=1;swing=0;ft=0;camX=0;ball={x:BX+40,y:BY,vx:0,vy:0,r:7,rot:0}}
+function act(){
+  if(inDojo)return;
+  if(phase===0){phase=1;power=0;powDir=1}
+  else if(phase===1){
+    throws++;
+    if(throws>=limit){ // arm gives out: collapse, no throw
+      dead=true;bill=cash;throws=0;
+      
+      ball.vx=0;ball.vy=0;phase=3;persist();ui();return;
+    }
+    rating=rateOf(power);ratingT=1;const speed=(250+power*650)*(1+0.06*powLvl);
+    const a=angle*Math.PI/180;
+    ball.vx=Math.cos(a)*speed;ball.vy=-Math.sin(a)*speed;
+    swing=0.22;ft=0;phase=2;
+  } else if(phase===3&&!dead){reset()}
+}
+let aiming=false;
+cv.addEventListener('pointerdown',e=>{
+  if(inDojo)return;
+  if(e.pointerType==='mouse'){aimFrom(e);act();return}
+  // touch / pen: drag to aim, lift your finger to start the power meter, tap again to throw
+  if(phase===0){aimFrom(e);aiming=true}else act();
+});
+cv.addEventListener('pointermove',e=>{if(phase===0&&(e.pointerType==='mouse'||aiming))aimFrom(e)});
+cv.addEventListener('pointerup',()=>{if(aiming){aiming=false;if(phase===0)act()}});
+cv.addEventListener('pointercancel',()=>{aiming=false});
+function aimFrom(e){
+  if(phase!==0)return;
+  const r=cv.getBoundingClientRect();
+  const x=(e.clientX-r.left)*W/r.width,y=(e.clientY-r.top)*H/r.height;
+  const a=Math.atan2(BY-y,Math.max(20,x-BX))*180/Math.PI;
+  angle=Math.max(8,Math.min(82,a));
+}
+function resetProgress(){
+  cash=0;best=0;last=0;powLvl=0;bncLvl=0;condLvl=0;dojoLvl=[0,0,0];hatIdx=0;throws=0;
+  rollLimit();reset();persist();ui();
+}
+addEventListener('keydown',e=>{
+  if(window.__gen!==gen)return;
+  if(e.target&&(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT'||e.target.tagName==='SELECT'))return; // let the code editor type normally
+  if(e.code==='KeyR'){resetProgress();return}
+  if(e.code==='Escape'&&inDojo){setDojo(false);return}
+  if(inDojo)return;
+  if(e.code==='Space'){e.preventDefault();act()}
+  if(e.code==='ArrowUp')angle=Math.min(82,angle+2);
+  if(e.code==='ArrowDown')angle=Math.max(8,angle-2);
+});
+
+// The arm stays still, holding the ball up behind his head.
+function armAngle(){
+  return -2.16;
+}
+function update(dt){
+  if(phase===2&&ball.held){swing-=dt;if(swing<=0){swing=0;ball.held=false;ball.vx=ball.pvx;ball.vy=ball.pvy;ft=0.25}}
+  if(ft>0)ft-=dt;
+  if(phase<2){ball.x=BX-16;ball.y=GROUND-70}
+  if(phase===1){power+=powDir*dt*1.4;if(power>=1){power=1;powDir=-1}if(power<=0){power=0;powDir=1}}
+  if(dead){ball.vy+=900*dt;ball.y=Math.min(GROUND-ball.r,ball.y+ball.vy*dt)}
+  if(phase===2){
+    const bounce=Math.min(0.85,0.45+0.02*bncLvl);
+    if(rating&&(ratingT-=dt)<=0)rating=''; // rating text lasts about a second
+    if(!ball.held)ball.vy+=900*dt;
+    ball.vx*=1-0.04*dt; // air drag
+    if(!ball.held){ball.x+=ball.vx*dt;ball.y+=ball.vy*dt}
+    ball.rot+=ball.vx*dt*0.05;
+    if(ball.y>GROUND-ball.r){
+      ball.y=GROUND-ball.r;
+      if(Math.abs(ball.vy)>60){rating='';ball.vy=-ball.vy*bounce;ball.vx*=0.85}
+      else{ball.vy=0;ball.vx*=1-(2.2-0.05*Math.min(bncLvl,10))*dt}
+      if(Math.abs(ball.vy)<1&&Math.abs(ball.vx)<8){finish()}
+    }
+  }
+  camX=Math.max(0,ball.x-W*0.35);
+}
+function finish(){
+  phase=3;
+  last=Math.max(0,Math.round((ball.x-BX)/10));
+  best=Math.max(best,last);
+  cash+=last;persist();ui();
+}
+
+// The dojo cat: walks around, sits for a moment, or curls up for a nap.
+const catColors=[['Orange','#e8903a'],['Black','#2b2b2b'],['White','#f4f4f0'],['Gray','#8a8d93'],['Brown','#7a4e2d'],['Cream','#e9d8b4'],['Blue-gray','#6f8fa8'],['Tan','#c9a26b']];
+const cat={x:300,y:372,dir:1,mode:'walk',tx:520,ty:372,timer:0,last:0,phase:0,z:0,rot:0,vz:0,land:0,next:null,fy:395,swat:0};
+const ballCols=['#2f6fb0','#c8372d','#2e9e4f','#f2b705','#8e44ad','#ef7d22'];
+const catBall={x:600,y:395,vx:0,vy:0,col:'#2f6fb0'};
+function catGo(next,tx,ty){cat.next=next;cat.tx=tx;cat.ty=ty;cat.mode='walk'}
+function catWander(){cat.mode='walk';cat.tx=90+Math.random()*620;cat.ty=350+Math.random()*45}
+function catStep(){
+  const now=performance.now(),dt=Math.min(.05,cat.last?(now-cat.last)/1000:0);cat.last=now;cat.phase+=dt;if(cat.land>0)cat.land=Math.max(0,cat.land-dt);
+  if(cat.mode==='walk'){
+    const dx=cat.tx-cat.x,dy=cat.ty-cat.y,d=Math.hypot(dx,dy);
+    if(d<3){
+      const n=cat.next;cat.next=null;
+      if(n==='climb'){cat.mode='climb';cat.x=408;cat.dir=1;cat.z=0;cat.rot=-Math.PI/2} // reached the banner
+      else if(n==='bath'){cat.mode='bath';cat.fy=cat.y;cat.x=400-8*cat.dir;cat.y=345;cat.timer=30} // hops into the ice bath for ~30s
+      else if(n==='play'){cat.mode='play';cat.timer=30;cat.swat=0;Object.assign(catBall,{x:600,y:395,vx:-90,vy:0,col:ballCols[Math.floor(Math.random()*6)]})} // plays with a plyo ball for ~30s
+      else{
+        const r=Math.random();
+        if(r<.3){cat.mode='idle';cat.timer=1+Math.random()*2}
+        else if(r<.55){if(Math.random()<.1)catGo('climb',400,365);else{cat.mode='curl';cat.timer=5+Math.random()*5}} // ~10% of naps: climb the banner instead
+        else if(r<.775)catGo('bath',400,395);
+        else catGo('play',575,395);
+      }
+    }else{cat.x+=dx/d*45*dt;cat.y+=dy/d*45*dt;if(Math.abs(dx)>1)cat.dir=dx>0?1:-1}
+  }else if(cat.mode==='climb'){
+    cat.z+=45*dt;if(cat.z>=cat.y-130){cat.z=cat.y-130;cat.mode='hang';cat.timer=.7}
+  }else if(cat.mode==='hang'){
+    cat.timer-=dt;if(cat.timer<=0){cat.mode='fall';cat.vz=0}
+  }else if(cat.mode==='fall'){
+    cat.vz+=900*dt;cat.z-=cat.vz*dt;cat.rot+=(0-cat.rot)*Math.min(1,dt*7); // twist around to land feet first
+    if(cat.z<=0){cat.z=0;cat.rot=0;cat.mode='idle';cat.timer=1.2;cat.land=.25}
+  }else if(cat.mode==='bath'){
+    cat.timer-=dt;if(cat.timer<=0){cat.y=cat.fy;cat.x=400;catWander();cat.dir=cat.tx>cat.x?1:-1}
+  }else if(cat.mode==='play'){
+    cat.timer-=dt;const b=catBall;
+    b.x+=b.vx*dt;b.y+=b.vy*dt;const f=Math.pow(.35,dt);b.vx*=f;b.vy*=f;
+    if(b.x<90||b.x>710){b.vx*=-.8;b.x=Math.max(90,Math.min(710,b.x))}
+    if(b.y<350||b.y>400){b.vy*=-.8;b.y=Math.max(350,Math.min(400,b.y))}
+    if(cat.swat>0){cat.swat-=dt;cat.z=cat.swat>0?Math.sin(cat.swat/.35*Math.PI)*8:0}
+    else{
+      const dx=b.x-cat.x,dy=b.y-cat.y,d=Math.hypot(dx,dy);
+      if(Math.abs(dx)>1)cat.dir=dx>0?1:-1;
+      if(d<26){cat.swat=.35;b.vx=(dx>=0?1:-1)*(110+Math.random()*110);b.vy=(Math.random()-.5)*70} // swat the ball
+      else{cat.x+=dx/d*75*dt;cat.y+=dy/d*75*dt}
+    }
+    if(cat.timer<=0){cat.z=0;cat.swat=0;catWander()}
+  }else{
+    cat.timer-=dt;
+    if(cat.timer<=0)catWander();
+  }
+}
+function drawPlayBall(){
+  const b=catBall,r=11,cy=b.y-9;
+  ctx.fillStyle='rgba(0,0,0,.2)';ctx.beginPath();ctx.ellipse(b.x,b.y+1,r,4,0,0,7);ctx.fill();
+  ctx.fillStyle=b.col;ctx.beginPath();ctx.arc(b.x,cy,r,0,7);ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,.35)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(b.x,cy,r,0,7);ctx.stroke();
+  ctx.beginPath();ctx.ellipse(b.x,cy,r*.45,r,b.x/20,0,7);ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,.4)';ctx.beginPath();ctx.arc(b.x-4,cy-4,2.5,0,7);ctx.fill();
+}
+function drawBathFx(){
+  if(cat.mode!=='bath')return;
+  ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1.5;
+  for(let i=0;i<2;i++){const p=(cat.phase*.6+i*.5)%1;ctx.globalAlpha=1-p;ctx.beginPath();ctx.ellipse(400,333,20+p*28,4+p*5,0,0,7);ctx.stroke()}
+  ctx.fillStyle='#bfe9fa';
+  for(let i=0;i<5;i++){const p=(cat.phase*1.3+i*.2)%1;ctx.globalAlpha=1-p;ctx.beginPath();ctx.arc(400+Math.cos(i*1.3)*(12+p*20),330-Math.sin(p*Math.PI)*16,2,0,7);ctx.fill()}
+  ctx.globalAlpha=1;
+}
+// Name tag that follows the cat around
+function drawTag(){
+  const nm=(look.catName||'').trim();if(!nm)return;
+  ctx.save();ctx.font='bold 12px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';
+  const w=ctx.measureText(nm).width+14,climbing=cat.mode==='climb'||cat.mode==='hang'||cat.mode==='fall';
+  const x=Math.max(w/2+2,Math.min(W-w/2-2,cat.x-(climbing?10:0))),y=cat.y-cat.z-(cat.mode==='curl'?38:50);
+  ctx.fillStyle='rgba(255,255,255,.95)';ctx.strokeStyle='#6b4a2b';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.rect(x-w/2,y-9,w,18);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x-4,y+9);ctx.lineTo(x,y+15);ctx.lineTo(x+4,y+9);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#222';ctx.fillText(nm,x,y+1);ctx.restore();
+}
+function drawCat(){
+  const col=catColors[look.catColor][1],sp=catColors[look.catSpot][1];
+  const curl=cat.mode==='curl',walk=cat.mode==='walk'||(cat.mode==='play'&&cat.swat<=0),sw=Math.sin(cat.phase*9),br=Math.sin(cat.phase*2);
+  const air=cat.mode==='climb'||cat.mode==='hang'||cat.mode==='fall';
+  ctx.fillStyle='rgba(0,0,0,'+(cat.mode==='bath'?0:air?Math.max(0,.18-cat.z/1000):.18)+')';ctx.beginPath();ctx.ellipse(cat.x,cat.y,curl?20:21,4,0,0,7);ctx.fill();
+  const k=cat.land/.25;
+  const bath=cat.mode==='bath';
+  ctx.save();if(bath){ctx.beginPath();ctx.rect(0,0,W,339);ctx.clip()} // only the part above the water shows
+  ctx.save();ctx.translate(cat.x,cat.y-cat.z);ctx.scale(cat.dir*(1+.15*k),1-.25*k);ctx.rotate(cat.rot);ctx.lineCap='round';
+  let bx,by,brx,bry,hx,hy;
+  if(curl){bx=0;by=-10;brx=19;bry=10+br*.6;hx=12;hy=-10}
+  else{bx=0;by=-15;brx=18;bry=8;hx=19;hy=-22}
+  // tail and legs sit behind the body
+  ctx.strokeStyle=col;
+  if(!curl){ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-16,-17);ctx.quadraticCurveTo(-27,-20+Math.sin(cat.phase*3)*4,-24,-34);ctx.stroke();
+    [-11,-6,8,13].forEach((x,i)=>{const o=cat.mode==='fall'?(i<2?-5:5):(walk||cat.mode==='climb')?sw*3*(i%2?1:-1):0;ctx.beginPath();ctx.moveTo(x,-12);ctx.lineTo(x+o,0);ctx.stroke()})}
+  // body
+  ctx.fillStyle=col;ctx.beginPath();ctx.ellipse(bx,by,brx,bry,0,0,7);ctx.fill();
+  if(look.catSpots){
+    ctx.save();ctx.beginPath();ctx.ellipse(bx,by,brx,bry,0,0,7);ctx.clip();ctx.fillStyle=sp;
+    [[-9,-4,4],[1,2,3.5],[8,-5,3.5],[-2,-7,3],[-13,3,3]].forEach(([x,y,r])=>{ctx.beginPath();ctx.arc(bx+x,by+y,r,0,7);ctx.fill()});
+    ctx.restore();
+  }
+  // curled tail: starts at the back of the body and wraps across the belly (drawn on top, with an outline so it shows)
+  if(curl){[['rgba(0,0,0,.25)',7],[col,5]].forEach(([c,w])=>{ctx.strokeStyle=c;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(-16,-10);ctx.bezierCurveTo(-15,2,4,3,15,-3);ctx.stroke()})}
+  // head, ears, face
+  ctx.fillStyle=col;
+  [[-4,-5],[3,-6]].forEach(([x,y])=>{ctx.beginPath();ctx.moveTo(hx+x-4,hy+y+3);ctx.lineTo(hx+x-1,hy+y-6);ctx.lineTo(hx+x+4,hy+y+3);ctx.fill()});
+  ctx.beginPath();ctx.arc(hx,hy,curl?7:8,0,7);ctx.fill();
+  if(look.catSpots){ctx.fillStyle=sp;ctx.beginPath();ctx.arc(hx-2,hy-4,2.5,0,7);ctx.fill()}
+  ctx.fillStyle='#e58a96';ctx.beginPath();ctx.arc(hx+6,hy+1.5,1.4,0,7);ctx.fill();
+  ctx.strokeStyle='#222';ctx.fillStyle='#222';ctx.lineWidth=1.5;
+  if(curl||bath){ctx.beginPath();ctx.moveTo(hx+1,hy-1);ctx.lineTo(hx+5,hy-1);ctx.stroke()}
+  else{ctx.beginPath();ctx.arc(hx+3,hy-1,1.5,0,7);ctx.fill()}
+  if(cat.mode==='play'&&cat.swat>0){ctx.strokeStyle=col;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(14,-12);ctx.lineTo(26,-5);ctx.stroke()} // swatting paw
+  ctx.restore();
+  if(bath)ctx.restore();
+}
+function drawDojo(){
+  const t=performance.now();
+  // paper wall
+  ctx.fillStyle='#efe3c4';ctx.fillRect(0,0,W,H);
+  // shoji screens
+  for(let i=0;i<4;i++){
+    const x=[60,230,430,600][i],w=140,y=70,h=215;
+    ctx.fillStyle='#f8f1dc';ctx.fillRect(x,y,w,h);
+    ctx.strokeStyle='#6b4a2b';ctx.lineWidth=2;
+    for(let gx=1;gx<4;gx++){ctx.beginPath();ctx.moveTo(x+gx*w/4,y);ctx.lineTo(x+gx*w/4,y+h);ctx.stroke()}
+    for(let gy=1;gy<5;gy++){ctx.beginPath();ctx.moveTo(x,y+gy*h/5);ctx.lineTo(x+w,y+gy*h/5);ctx.stroke()}
+    ctx.lineWidth=5;ctx.strokeRect(x,y,w,h);
+  }
+  // ceiling beam and baseboard
+  ctx.fillStyle='#4a2e1a';ctx.fillRect(0,0,W,40);ctx.fillRect(0,282,W,18);
+  ctx.fillStyle='#6b4a2b';ctx.fillRect(0,40,W,8);
+  // hanging banner
+  ctx.fillStyle='#c8372d';ctx.fillRect(366,48,68,150);
+  ctx.fillStyle='#a52a22';ctx.fillRect(366,192,68,6);
+  ctx.fillStyle='#fff';ctx.font='bold 40px system-ui';ctx.textAlign='center';
+  ctx.fillText('道',400,106);ctx.fillText('場',400,156);
+  // paper lanterns
+  [[34,0],[766,0]].forEach(([lx])=>{
+    ctx.strokeStyle='#222';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(lx,40);ctx.lineTo(lx,90);ctx.stroke();
+    ctx.fillStyle='rgba(255,190,90,.35)';ctx.beginPath();ctx.arc(lx,125,44,0,7);ctx.fill();
+    ctx.fillStyle='#e0472f';ctx.beginPath();ctx.ellipse(lx,125,22,34,0,0,7);ctx.fill();
+    ctx.fillStyle='#222';ctx.fillRect(lx-14,88,28,5);ctx.fillRect(lx-14,154,28,5);
+  });
+  // wooden floor
+  ctx.fillStyle='#b98a54';ctx.fillRect(0,300,W,150);
+  ctx.strokeStyle='#9a6f3f';ctx.lineWidth=2;
+  for(let i=0;i<5;i++){ctx.beginPath();ctx.moveTo(0,300+i*32);ctx.lineTo(W,300+i*32);ctx.stroke()}
+  for(let i=0;i<10;i++){const x=i*90+((i%2)*45);ctx.beginPath();ctx.moveTo(x,300+(i%3)*32);ctx.lineTo(x,332+(i%3)*32);ctx.stroke()}
+  // tatami mat
+  ctx.fillStyle='#a8b878';ctx.fillRect(60,330,680,100);
+  ctx.strokeStyle='#6d7a47';ctx.lineWidth=3;ctx.strokeRect(60,330,680,100);
+  ctx.beginPath();ctx.moveTo(400,330);ctx.lineTo(400,430);ctx.stroke();
+  // stations
+  const sx=[140,400,660],fy=385;
+  // 0: Band Exercises - rack with red resistance bands that have handles
+  ctx.fillStyle='#6b4a2b';
+  ctx.fillRect(sx[0]-46,fy-112,6,112);ctx.fillRect(sx[0]+40,fy-112,6,112);ctx.fillRect(sx[0]-46,fy-112,92,7);
+  [[-22,'#e0382f'],[22,'#b8231d']].forEach(([o,col])=>{
+    const x=sx[0]+o;
+    ctx.strokeStyle=col;ctx.lineWidth=5;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(x-13,fy-62);ctx.quadraticCurveTo(x-13,fy-106,x,fy-106);ctx.quadraticCurveTo(x+13,fy-106,x+13,fy-62);ctx.stroke();
+    ctx.fillStyle='#2b2b2b';ctx.fillRect(x-19,fy-66,12,24);ctx.fillRect(x+7,fy-66,12,24);
+    ctx.fillStyle='#555';ctx.fillRect(x-17,fy-62,3,16);ctx.fillRect(x+9,fy-62,3,16);
+  });
+  // a band lying on the mat
+  ctx.strokeStyle='#e0382f';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(sx[0]-30,fy-8);ctx.quadraticCurveTo(sx[0],fy+8,sx[0]+30,fy-8);ctx.stroke();
+  ctx.fillStyle='#2b2b2b';ctx.fillRect(sx[0]-40,fy-16,12,16);ctx.fillRect(sx[0]+28,fy-16,12,16);
+  // 1: Ice Bath - small wooden tub of ice water
+  ctx.fillStyle='#8b5a2b';ctx.fillRect(sx[1]-58,fy-52,116,52);
+  ctx.strokeStyle='#6b4420';ctx.lineWidth=2;
+  for(let i=-2;i<=2;i++){ctx.beginPath();ctx.moveTo(sx[1]+i*22,fy-52);ctx.lineTo(sx[1]+i*22,fy);ctx.stroke()}
+  ctx.strokeStyle='#4a4a4a';ctx.lineWidth=4;
+  [fy-40,fy-12].forEach(y=>{ctx.beginPath();ctx.moveTo(sx[1]-58,y);ctx.lineTo(sx[1]+58,y);ctx.stroke()});
+  ctx.fillStyle='#6b4420';ctx.beginPath();ctx.ellipse(sx[1],fy-52,58,13,0,0,7);ctx.fill();
+  ctx.fillStyle='#9fdcf2';ctx.beginPath();ctx.ellipse(sx[1],fy-52,50,10,0,0,7);ctx.fill();
+  for(let i=0;i<5;i++){
+    const ix=sx[1]-30+i*15,iy=fy-52+Math.sin(t/500+i*1.7)*2+((i%2)?3:-2);
+    ctx.save();ctx.translate(ix,iy);ctx.rotate(i*0.7);
+    ctx.fillStyle='rgba(255,255,255,.92)';ctx.strokeStyle='#7ec8e3';ctx.lineWidth=1.5;
+    ctx.fillRect(-6,-6,12,12);ctx.strokeRect(-6,-6,12,12);ctx.restore();
+  }
+  // 2: Plyo Balls - pile of medicine balls
+  const cols=['#2f6fb0','#c8372d','#2e9e4f','#f2b705','#8e44ad','#ef7d22'];
+  [[-40,-20],[0,-20],[40,-20],[-20,-54],[20,-54],[0,-88]].forEach(([ox,oy],i)=>{
+    const cx=sx[2]+ox,cy=fy+oy,r=20;
+    ctx.fillStyle=cols[i];ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,.35)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx-r,cy);ctx.quadraticCurveTo(cx,cy+8,cx+r,cy);ctx.stroke();
+    ctx.beginPath();ctx.ellipse(cx,cy,r*0.45,r,0,0,7);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.4)';ctx.beginPath();ctx.arc(cx-7,cy-8,4,0,7);ctx.fill();
+  });
+  catStep();
+  const ballFirst=cat.mode==='play'&&catBall.y<=cat.y;
+  if(ballFirst)drawPlayBall();
+  drawCat();
+  if(cat.mode==='play'&&!ballFirst)drawPlayBall();
+  drawBathFx();drawTag();
+  // labels
+  ctx.font='bold 15px system-ui';ctx.textAlign='center';ctx.fillStyle='#2b1a0e';
+  for(let i=0;i<3;i++){ctx.fillText(dojoNames[i],sx[i],408);ctx.fillText('Lv '+dojoLvl[i],sx[i],426)}
+}
+const ballTypes=['Baseball','Tennis ball','Basketball','Soccer ball','Beach ball'];
+function drawBall(r){
+  const t=look.ball;
+  ctx.save();ctx.beginPath();ctx.arc(0,0,r,0,7);ctx.clip();
+  ctx.fillStyle=['#fff','#d4e84a','#e07b2a','#fff','#fff'][t];ctx.fillRect(-r,-r,2*r,2*r);
+  ctx.lineWidth=1.5;ctx.strokeStyle=['#c8372d','#fff','#222','#222','#fff'][t];
+  const arc=(x,rad,a,b)=>{ctx.beginPath();ctx.arc(x,0,rad,a,b);ctx.stroke()};
+  if(t<2){arc(-r*1.2,r*.8,-.9,.9);arc(r*1.2,r*.8,Math.PI-.9,Math.PI+.9)}
+  if(t===2){ctx.beginPath();ctx.moveTo(-r,0);ctx.lineTo(r,0);ctx.moveTo(0,-r);ctx.lineTo(0,r);ctx.stroke();arc(-r*1.1,r*.9,-.9,.9);arc(r*1.1,r*.9,Math.PI-.9,Math.PI+.9)}
+  if(t===3){
+    ctx.fillStyle='#222';ctx.beginPath();
+    for(let i=0;i<5;i++){const a=i*1.2566-1.57;ctx.lineTo(Math.cos(a)*r*.45,Math.sin(a)*r*.45)}
+    ctx.closePath();ctx.fill();
+    for(let i=0;i<5;i++){const a=i*1.2566-1.57;ctx.beginPath();ctx.moveTo(Math.cos(a)*r*.45,Math.sin(a)*r*.45);ctx.lineTo(Math.cos(a)*r*1.1,Math.sin(a)*r*1.1);ctx.stroke()}
+  }
+  if(t===4){
+    const cols=['#e53935','#fbc02d','#1e88e5','#43a047','#fff','#8e44ad'];
+    for(let i=0;i<6;i++){ctx.fillStyle=cols[i];ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,r*1.2,i*Math.PI/3,(i+1)*Math.PI/3);ctx.closePath();ctx.fill()}
+  }
+  ctx.restore();
+  ctx.strokeStyle=t===0?'#c8372d':'rgba(0,0,0,.4)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(0,0,r,0,7);ctx.stroke();
+}
+function draw(){
+  if(inDojo){drawDojo();return}
+  const g=ctx.createLinearGradient(0,0,0,GROUND);g.addColorStop(0,'#6ec3f5');g.addColorStop(1,'#d6f0ff');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // parallax clouds
+  ctx.fillStyle='rgba(255,255,255,.8)';
+  for(let i=0;i<6;i++){const x=((i*260-camX*0.2)%1560+1560)%1560-150;ctx.beginPath();ctx.ellipse(x,70+(i%3)*40,50,16,0,0,7);ctx.fill()}
+  // ground
+  ctx.fillStyle='#4f9a3d';ctx.fillRect(0,GROUND,W,H-GROUND);
+  ctx.fillStyle='#3d7d2f';ctx.fillRect(0,GROUND,W,8);
+  // yard markers (every 50 cm = 500 px)
+  ctx.fillStyle='#fff';ctx.font='bold 14px system-ui';ctx.textAlign='center';
+  const start=Math.floor((camX-BX)/500);
+  for(let i=Math.max(0,start);i<start+4;i++){
+    const x=BX+i*500-camX;
+    ctx.fillRect(x-1,GROUND,3,22);
+    ctx.fillText(i*50+' cm',x,GROUND+40);
+  }
+  // batter
+  const bx=BX-camX;ctx.save();if(dead){ctx.translate(bx,GROUND);ctx.rotate(-1.45);ctx.translate(-bx,-GROUND)}
+  ctx.strokeStyle=look.body;ctx.lineWidth=5;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(bx,GROUND-22);ctx.lineTo(bx-10,GROUND);ctx.moveTo(bx,GROUND-22);ctx.lineTo(bx+12,GROUND);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(bx,GROUND-22);ctx.lineTo(bx,GROUND-50);ctx.stroke();
+  ctx.fillStyle=look.skin;ctx.beginPath();ctx.arc(bx,GROUND-58,9,0,7);ctx.fill();
+  if(look.hat){ctx.fillStyle=hatColors[hatIdx];ctx.beginPath();ctx.arc(bx,GROUND-62,9,Math.PI,0);ctx.fill();ctx.fillRect(bx,GROUND-63,15,3)}
+  // throwing arm
+  let arm=armAngle();
+  // arm follows the aim angle until release
+  
+  ctx.save();ctx.translate(bx,GROUND-46);ctx.rotate(arm);
+  ctx.strokeStyle=look.skin;ctx.lineWidth=5+Math.min(powLvl,6);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(29,0);ctx.stroke();ctx.restore();ctx.restore();
+  // aim arrow
+  if(phase<2){
+    const a=angle*Math.PI/180;
+    ctx.setLineDash([6,6]);ctx.strokeStyle='rgba(255,255,255,.9)';ctx.lineWidth=3;
+    const hx=BX-16-camX,hy=GROUND-70;ctx.beginPath();ctx.moveTo(hx,hy);
+    ctx.lineTo(hx+Math.cos(a)*110,hy-Math.sin(a)*110);ctx.stroke();ctx.setLineDash([]);
+  }
+  // ball
+  ctx.save();ctx.translate(ball.x-camX,ball.y);ctx.rotate(ball.rot);
+  drawBall(ball.r);
+  ctx.restore();
+  // power meter
+  if(phase===1){
+    ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(20,20,200,18);
+    ctx.fillStyle=power>=.95?'#29b6f6':power>=.7?'#43a047':power>=.4?'#fbc02d':'#e53935';
+    ctx.fillRect(20,20,200*power,18);
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.strokeRect(20,20,200,18);[.4,.7,.95].forEach(t=>{ctx.beginPath();ctx.moveTo(20+200*t,20);ctx.lineTo(20+200*t,38);ctx.stroke()});
+  }
+  ctx.fillStyle='#fff';ctx.font='bold 16px system-ui';ctx.textAlign='left';
+  ctx.fillStyle='rgba(0,0,0,.55)';
+  const msg=dead?'Your UCL Exploded! Spend $'+bill+' to have Tommy John Surgery!':['Aim, then click','Click to throw!','','Click to go again'][phase];
+  if(msg){ctx.textAlign='center';ctx.fillText(msg,W/2,40)}
+  if(rating&&!dead){
+    ctx.save();ctx.font='bold 30px system-ui';ctx.textAlign='center';ctx.lineWidth=4;ctx.strokeStyle='rgba(0,0,0,.5)';
+    ctx.fillStyle={'BAD':'#e53935','GOOD':'#fbc02d','GREAT!':'#43a047','PERFECT!':'#29b6f6'}[rating];
+    ctx.strokeText(rating,W/2,100);ctx.fillText(rating,W/2,100);ctx.restore();
+  }
+  if(dead)ctx.fillText('Press "Pay medical bill" below to continue',W/2,62);
+  ctx.textAlign='right';ctx.fillText('Throws: '+throws,W-20,30);
+  if(!dead&&limit-throws<=2)ctx.fillText('Arm looks tired…',W-20,52);
+  if(phase===2){ctx.textAlign='left';ctx.fillText(Math.max(0,Math.round((ball.x-BX)/10))+' cm',20,30)}
+}
+let t0=performance.now();
+function loop(t){
+  if(window.__gen!==gen)return;
+  const dt=Math.min(0.033,(t-t0)/1000);t0=t;
+  update(dt);draw();requestAnimationFrame(loop);
+}
+const cm=document.getElementById('custModal'),cS=document.getElementById('cSkin'),cB=document.getElementById('cBody'),cBall=document.getElementById('cBall'),cHat=document.getElementById('cHat'),cCat=document.getElementById('cCat'),cSp=document.getElementById('cSpots'),cSpC=document.getElementById('cSpotCol'),cNm=document.getElementById('cName');
+[cCat,cSpC].forEach(sel=>{sel.innerHTML='';catColors.forEach((c,i)=>sel.add(new Option(c[0],i)))});
+cBall.innerHTML='';ballTypes.forEach((n,i)=>cBall.add(new Option(n,i)));
+document.getElementById('custBtn').onclick=()=>{cS.value=look.skin;cB.value=look.body;cBall.value=look.ball;cHat.checked=look.hat;cCat.value=look.catColor;cSp.checked=look.catSpots;cSpC.value=look.catSpot;cNm.value=look.catName;cm.style.display='flex'};
+document.getElementById('cDone').onclick=()=>{cm.style.display='none'};
+[cS,cB,cBall,cHat,cCat,cSp,cSpC,cNm].forEach(el=>el.addEventListener('input',()=>{look.skin=cS.value;look.body=cB.value;look.ball=+cBall.value;look.hat=cHat.checked;look.catColor=+cCat.value;look.catSpots=cSp.checked;look.catSpot=+cSpC.value;look.catName=cNm.value;persist()}));
+document.getElementById('bPay').onclick=payBill;
+rollLimit();reset();if(save.dead){dead=true;bill=save.bill||0;phase=3}ui();requestAnimationFrame(loop);
+})();
+</script>
+<script>
+function openEditor(){
+  // Copy the page and put it back to its "fresh load" state so edits don't carry over screen changes
+  const c=document.documentElement.cloneNode(true);
+  const q=sel=>c.querySelector(sel);
+  q('#shop').setAttribute('style','margin-top:8px');
+  q('#dojoShop').setAttribute('style','margin-top:8px;display:none');
+  q('#editorModal').removeAttribute('style');
+  ['bPow','bBounce','bDojo','bD0','bD1','bD2'].forEach(id=>{const b=q('#'+id);b.textContent='';b.removeAttribute('disabled')});
+  document.getElementById('editorTextarea').value='<!DOCTYPE html>\n'+c.outerHTML;
+  document.getElementById('editorModal').style.display='flex';
+}
+function closeEditor(){
+  document.getElementById('editorModal').style.display='none';
+}
+function applyCode(){
+  const code=document.getElementById('editorTextarea').value;
+  // Check the code for mistakes first, so a typo can't break the game
+  try{
+    const doc=new DOMParser().parseFromString(code,'text/html');
+    doc.querySelectorAll('script:not([src])').forEach(sc=>new Function(sc.textContent));
+  }catch(err){
+    alert('Your code has an error, so the changes were not applied:\n\n'+err.message);
+    return;
+  }
+  if(!/^\s*<!doctype/i.test(code))code='<!DOCTYPE html>\n'+code;
+  // If we're already running inside the preview frame, ask the host page to reload the frame.
+  try{if(window.parent!==window&&typeof window.parent.__plLoad==='function'){window.parent.__plLoad(code);return}}catch(e){}
+  window.__plLoad(code);
+}
+// Runs the edited code in a brand-new frame (a fresh window), instead of rewriting this page in place.
+window.__plLoad=function(code){
+  window.__gen=(window.__gen||0)+1; // stop this page's own game loop and key handler
+  let f=document.getElementById('plFrame');
+  if(!f){
+    f=document.createElement('iframe');f.id='plFrame';
+    f.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;border:0;z-index:5000;background:#fff';
+    f.addEventListener('load',()=>{try{f.contentWindow.focus()}catch(e){}});
+    document.body.appendChild(f);
+  }
+  f.srcdoc=code;
+};
+</script>
+</body>
+</html>
